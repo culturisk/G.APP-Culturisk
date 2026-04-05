@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "Session": {
+      "title": "Assessment Session",
+      "description": "A diagnostic session for a business.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique session ID" },
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "answers": { "type": "object", "description": "Map of question IDs to selected values" },
+        "currentPhase": { "type": "integer", "description": "The current phase index" },
+        "completedPhases": { "type": "array", "items": { "type": "integer" }, "description": "List of completed phase IDs" },
+        "timestamp": { "type": "integer", "description": "Creation timestamp" },
+        "report": { "type": "string", "description": "Generated strategic report" },
+        "scores": {
+          "type": "object",
+          "properties": {
+            "business": { "type": "integer" },
+            "marketing": { "type": "integer" },
+            "audience": { "type": "integer" },
+            "positioning": { "type": "integer" },
+            "cultural": { "type": "integer" }
+          }
+        }
+      },
+      "required": ["id", "timestamp", "answers"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Collection of diagnostic sessions."
+    }
+  }
+}

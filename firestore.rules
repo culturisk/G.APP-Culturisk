@@ -1,0 +1,78 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: sessions
+// Document ID: sessionId
+// Fields:
+//   - id: string (required) - Unique session ID
+//   - userId: string (optional) - Firebase Auth UID
+//   - answers: map (required) - Map of question IDs to selected values
+//   - currentPhase: number (optional) - The current phase index
+//   - completedPhases: list (optional) - List of completed phase IDs
+//   - timestamp: number (required) - Creation timestamp
+//   - report: string (optional) - Generated strategic report
+//   - scores: map (optional) - Calculated scores
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isValidSession(data) {
+      return data.id is string &&
+             data.timestamp is number &&
+             data.answers is map &&
+             data.answers.keys().size() <= 100 &&
+             (!('userId' in data) || data.userId is string) &&
+             (!('currentPhase' in data) || data.currentPhase is number) &&
+             (!('completedPhases' in data) || data.completedPhases is list) &&
+             (!('report' in data) || (data.report is string && data.report.size() < 50000)) &&
+             (!('scores' in data) || data.scores is map);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /sessions/{sessionId} {
+      // Allow read if user is the owner
+      allow read: if isDocOwner();
+      
+      // Allow create if data is valid
+      // If userId is provided, it must match the authenticated user
+      allow create: if isValidSession(request.resource.data) &&
+                      (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid);
+      
+      // Allow update if user is the owner and data remains valid
+      allow update: if isDocOwner() && 
+                       isValidSession(request.resource.data) &&
+                       request.resource.data.userId == resource.data.userId;
+      
+      // Allow delete if user is the owner
+      allow delete: if isDocOwner();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
