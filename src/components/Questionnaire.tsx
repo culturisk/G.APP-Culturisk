@@ -3,7 +3,7 @@ import { Phase, Question, AssessmentSession } from "../types";
 import { phases } from "../data/questions";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronRight, ChevronLeft, Lock, CheckCircle2, AlertCircle, TrendingUp, Target, Users, Globe, ShieldAlert, Loader2, Sparkles, BarChart3, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronLeft, Lock, CheckCircle2, AlertCircle, TrendingUp, Target, Users, Globe, ShieldAlert, Loader2, Sparkles, BarChart3, ArrowRight, ShieldCheck, Zap, Brain, Activity, Check, Minus, X, AlertTriangle } from "lucide-react";
 import { auth, db, signIn } from "../lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
@@ -20,6 +20,8 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
   const [session, setSession] = useState<AssessmentSession | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [lastAnsweredValue, setLastAnsweredValue] = useState<number | null>(null);
+  const [showSignal, setShowSignal] = useState(false);
 
   const currentPhase = phases[currentPhaseIndex];
   const currentQuestion = currentPhase.questions[currentQuestionIndex];
@@ -47,6 +49,10 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
   }, [user]);
 
   const handleAnswer = async (value: number) => {
+    setLastAnsweredValue(value);
+    setShowSignal(true);
+    setTimeout(() => setShowSignal(false), 1000);
+
     const newAnswers = { ...answers, [currentQuestion.id]: value };
     setAnswers(newAnswers);
 
@@ -106,6 +112,10 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
       Object.keys(results).forEach(key => {
         results[key as keyof typeof results] = Math.min(results[key as keyof typeof results], 50);
       });
+    } else if (answeredCount <= 20) {
+      Object.keys(results).forEach(key => {
+        results[key as keyof typeof results] = Math.min(results[key as keyof typeof results], 70);
+      });
     }
 
     return results;
@@ -115,11 +125,19 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
     if (!session) return;
     setIsSaving(true);
     const finalScores = calculateScores(finalAnswers);
+    
+    // Determine current phase and completed phases based on answers
+    const answeredCount = Object.keys(finalAnswers).length;
+    const currentPhaseId = Math.min(Math.floor(answeredCount / 10) + 1, phases.length);
+    const completedPhases = phases
+      .filter(p => p.id < currentPhaseId || (p.id === currentPhaseId && answeredCount % 10 === 0 && answeredCount > 0))
+      .map(p => p.id);
+
     const updatedSession: AssessmentSession = {
       ...session,
       answers: finalAnswers,
-      completedPhases: phases.map((p) => p.id),
-      currentPhase: phases.length,
+      completedPhases,
+      currentPhase: currentPhaseId,
       scores: finalScores,
     };
     
@@ -135,31 +153,110 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
     return phaseIndex > 0 && !user;
   };
 
+  const getOptionStyles = (value: number, isSelected: boolean) => {
+    if (isSelected) {
+      switch (value) {
+        case 4: return "border-green-500 bg-green-500 text-white shadow-green-200";
+        case 3: return "border-emerald-500 bg-emerald-500 text-white shadow-emerald-200";
+        case 2: return "border-amber-500 bg-amber-500 text-white shadow-amber-200";
+        case 1: return "border-orange-500 bg-orange-500 text-white shadow-orange-200";
+        case 0: return "border-red-500 bg-red-500 text-white shadow-red-200";
+        default: return "border-black bg-black text-white shadow-lg";
+      }
+    }
+    switch (value) {
+      case 4: return "border-gray-100 hover:border-green-200 hover:bg-green-50/30";
+      case 3: return "border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30";
+      case 2: return "border-gray-100 hover:border-amber-200 hover:bg-amber-50/30";
+      case 1: return "border-gray-100 hover:border-orange-200 hover:bg-orange-50/30";
+      case 0: return "border-gray-100 hover:border-red-200 hover:bg-red-50/30";
+      default: return "border-gray-100 hover:border-gray-300 hover:bg-gray-50";
+    }
+  };
+
+  const getOptionIcon = (value: number) => {
+    switch (value) {
+      case 4: return <CheckCircle2 className="w-5 h-5" />;
+      case 3: return <Check className="w-5 h-5" />;
+      case 2: return <Minus className="w-5 h-5" />;
+      case 1: return <X className="w-5 h-5" />;
+      case 0: return <AlertTriangle className="w-5 h-5" />;
+      default: return <ChevronRight className="w-5 h-5" />;
+    }
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-12">
+    <div className="w-full max-w-4xl mx-auto px-4 py-12 relative">
+      {/* Visual Signal Toast */}
+      <AnimatePresence>
+        {showSignal && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[120] px-6 py-3 bg-black text-white rounded-full font-bold uppercase tracking-widest text-[10px] flex items-center gap-3 shadow-2xl border border-white/10"
+          >
+            <Activity className="w-3 h-3 text-green-400 animate-pulse" />
+            Strategic Data Logged
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            Depth +{(lastAnsweredValue || 0) * 2.5}%
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="mb-12">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-lg">C</span>
+            <div 
+              className="w-10 h-10 bg-black rounded-lg flex items-center justify-center relative overflow-hidden group cursor-pointer"
+              onClick={() => window.location.reload()}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <span className="text-white font-black text-lg relative z-10">C</span>
             </div>
             <div>
               <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase">Culturisk Diagnostic</h2>
-              <p className="text-xs text-gray-500 font-mono uppercase tracking-widest">Phase {currentPhase.id} / 10</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500 font-mono uppercase tracking-widest">Phase {currentPhase.id} / 10</p>
+                <div className="w-1 h-1 rounded-full bg-gray-200" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                  {currentPhaseIndex < 3 ? "Foundation" : currentPhaseIndex < 6 ? "Execution" : "Strategy"}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-black text-gray-900">{Math.round(progress)}%</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completion</p>
+          <div className="flex items-center gap-6">
+            <div className="hidden sm:flex flex-col items-end">
+              <div className="flex items-center gap-2 mb-1">
+                <Brain className="w-3 h-3 text-gray-400" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Strategic Depth</span>
+              </div>
+              <div className="flex gap-0.5">
+                {[...Array(10)].map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={cn(
+                      "w-3 h-1 rounded-full transition-all duration-500",
+                      i < (progress / 10) ? "bg-black" : "bg-gray-100"
+                    )} 
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-black text-gray-900">{Math.round(progress)}%</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completion</p>
+            </div>
           </div>
         </div>
-        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden relative">
           <motion.div
-            className="h-full bg-black"
+            className="h-full bg-black relative z-10"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.5 }}
           />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
         </div>
       </div>
 
@@ -222,24 +319,37 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
               </div>
 
               <div className="space-y-3">
-                {currentQuestion.options.map((option) => (
-                  <button
-                    key={option.label}
-                    onClick={() => handleAnswer(option.value)}
-                    className={cn(
-                      "w-full p-5 text-left rounded-xl border-2 transition-all group flex items-center justify-between",
-                      answers[currentQuestion.id] === option.value
-                        ? "border-black bg-black text-white shadow-lg"
-                        : "border-gray-100 hover:border-gray-300 hover:bg-gray-50"
-                    )}
-                  >
-                    <span className="font-bold text-lg">{option.label}</span>
-                    <ChevronRight className={cn(
-                      "w-5 h-5 transition-transform group-hover:translate-x-1",
-                      answers[currentQuestion.id] === option.value ? "text-white" : "text-gray-300"
-                    )} />
-                  </button>
-                ))}
+                {currentQuestion.options.map((option) => {
+                  const isSelected = answers[currentQuestion.id] === option.value;
+                  return (
+                    <motion.button
+                      key={option.label}
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleAnswer(option.value)}
+                      className={cn(
+                        "w-full p-5 text-left rounded-xl border-2 transition-all group flex items-center justify-between",
+                        getOptionStyles(option.value, isSelected)
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                          isSelected ? "bg-white/20" : "bg-gray-50 group-hover:bg-gray-100"
+                        )}>
+                          <span className="text-[10px] font-black">{option.value}</span>
+                        </div>
+                        <span className="font-bold text-lg">{option.label}</span>
+                      </div>
+                      <div className={cn(
+                        "transition-all duration-300",
+                        isSelected ? "scale-110" : "opacity-30 group-hover:opacity-100"
+                      )}>
+                        {getOptionIcon(option.value)}
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between pt-8 border-t border-gray-100">
@@ -258,7 +368,8 @@ export const Questionnaire: React.FC<QuestionnaireProps> = ({ onComplete }) => {
                   <ChevronLeft className="w-4 h-4" />
                   <span className="text-xs font-bold uppercase tracking-widest">Previous</span>
                 </button>
-                <div className="text-xs font-mono text-gray-400 uppercase">
+                <div className="text-xs font-mono text-gray-400 uppercase flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                   Question {currentQuestionIndex + 1} / {currentPhase.questions.length}
                 </div>
               </div>

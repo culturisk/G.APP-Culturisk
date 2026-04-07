@@ -9,11 +9,11 @@ import { Blog } from "./components/Blog";
 import { About } from "./components/About";
 import { Team } from "./components/Team";
 import { AssessmentSession } from "./types";
-import { auth, db } from "./lib/firebase";
+import { auth, db, signIn } from "./lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, limit, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, History, ArrowRight, ShieldCheck, Zap, BarChart3 } from "lucide-react";
+import { Sparkles, History, ArrowRight, ShieldCheck, Zap, BarChart3, Globe, User, LogIn, CheckCircle2 } from "lucide-react";
 import { cn } from "./lib/utils";
 
 export default function App() {
@@ -23,6 +23,32 @@ export default function App() {
   const [pastSessions, setPastSessions] = useState<AssessmentSession[]>([]);
   const [isStarted, setIsStarted] = useState(false);
   const [activePage, setActivePage] = useState<"app" | "privacy" | "terms" | "contact" | "blog" | "about" | "team">("app");
+  const [onboardingStep, setOnboardingStep] = useState<"none" | "auth" | "website" | "suggestion">("none");
+  const [website, setWebsite] = useState("");
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+          setWebsite(userDoc.data().website || "");
+        } else {
+          const newProfile = {
+            uid: user.uid,
+            displayName: user.displayName,
+            email: user.email,
+            photoURL: user.photoURL,
+            createdAt: Date.now()
+          };
+          await setDoc(doc(db, "users", user.uid), newProfile);
+          setUserProfile(newProfile);
+        }
+      };
+      fetchProfile();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -43,6 +69,30 @@ export default function App() {
       setPastSessions([]);
     }
   }, [user]);
+
+  const handleStartDiagnostic = () => {
+    if (!user) {
+      setOnboardingStep("auth");
+    } else if (!userProfile?.website) {
+      setOnboardingStep("website");
+    } else {
+      setOnboardingStep("suggestion");
+    }
+  };
+
+  const handleWebsiteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user && website) {
+      await updateDoc(doc(db, "users", user.uid), { website });
+      setUserProfile({ ...userProfile, website });
+      setOnboardingStep("suggestion");
+    }
+  };
+
+  const startQuestionnaire = () => {
+    setOnboardingStep("none");
+    setIsStarted(true);
+  };
 
   const handleComplete = (session: AssessmentSession) => {
     setActiveSession(session);
@@ -113,7 +163,7 @@ export default function App() {
 
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                     <button
-                      onClick={() => setIsStarted(true)}
+                      onClick={handleStartDiagnostic}
                       className="group px-8 py-4 bg-black text-white rounded-2xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-2xl flex items-center gap-3"
                     >
                       Start Diagnostic <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -201,6 +251,106 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Onboarding Modals */}
+      <AnimatePresence>
+        {onboardingStep !== "none" && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-gray-100"
+            >
+              <div className="p-8 lg:p-10 text-center space-y-8">
+                {onboardingStep === "auth" && (
+                  <>
+                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto">
+                      <LogIn className="w-10 h-10 text-black" />
+                    </div>
+                    <div className="space-y-3">
+                      <h3 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">Identity Check</h3>
+                      <p className="text-gray-500 font-medium">Sign in with Google to save your diagnostic progress and unlock strategic history.</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await signIn();
+                        handleStartDiagnostic();
+                      }}
+                      className="w-full py-5 bg-black text-white rounded-2xl font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-xl flex items-center justify-center gap-3"
+                    >
+                      <LogIn className="w-5 h-5" /> Sign In with Google
+                    </button>
+                  </>
+                )}
+
+                {onboardingStep === "website" && (
+                  <>
+                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto">
+                      <Globe className="w-10 h-10 text-black" />
+                    </div>
+                    <div className="space-y-3">
+                      <h3 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">Business Context</h3>
+                      <p className="text-gray-500 font-medium">What is your company's primary website? This helps our engine contextualize your diagnostic.</p>
+                    </div>
+                    <form onSubmit={handleWebsiteSubmit} className="space-y-4">
+                      <input
+                        type="url"
+                        required
+                        placeholder="https://yourcompany.com"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        className="w-full px-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-black focus:outline-none transition-all font-medium"
+                      />
+                      <button
+                        type="submit"
+                        className="w-full py-5 bg-black text-white rounded-2xl font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-xl"
+                      >
+                        Continue
+                      </button>
+                    </form>
+                  </>
+                )}
+
+                {onboardingStep === "suggestion" && (
+                  <>
+                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto">
+                      <User className="w-10 h-10 text-black" />
+                    </div>
+                    <div className="space-y-3">
+                      <h3 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">Profile Ready</h3>
+                      <p className="text-gray-500 font-medium">Your basic profile is set. You can further customize your business details later for even deeper analysis.</p>
+                    </div>
+                    <div className="space-y-3">
+                      <button
+                        onClick={startQuestionnaire}
+                        className="w-full py-5 bg-black text-white rounded-2xl font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-xl flex items-center justify-center gap-3"
+                      >
+                        Start Assessment <ArrowRight className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          // In a real app, this would open a profile editor
+                          // For now, we just start the questionnaire
+                          startQuestionnaire();
+                        }}
+                        className="w-full py-4 bg-white text-gray-400 font-bold uppercase tracking-widest hover:text-black transition-colors"
+                      >
+                        Customize Later
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="bg-gray-50 p-4 text-center">
+                <button onClick={() => setOnboardingStep("none")} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors">
+                  Cancel Diagnostic
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* History Sidebar */}
       <AnimatePresence>
         {showHistory && (
@@ -266,7 +416,11 @@ export default function App() {
       {/* Report Modal */}
       <AnimatePresence>
         {activeSession && (
-          <Report session={activeSession} onClose={() => setActiveSession(null)} />
+          <Report 
+            session={activeSession} 
+            userProfile={userProfile}
+            onClose={() => setActiveSession(null)} 
+          />
         )}
       </AnimatePresence>
 

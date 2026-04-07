@@ -24,12 +24,30 @@
         }
       },
       "required": ["id", "timestamp", "answers"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "A user profile for a business strategist.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User's display name" },
+        "email": { "type": "string", "description": "User's email address" },
+        "photoURL": { "type": "string", "description": "User's photo URL" },
+        "website": { "type": "string", "description": "User's business website" },
+        "createdAt": { "type": "integer", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "email"]
     }
   },
   "firestore": {
     "/sessions/{sessionId}": {
       "schema": "Session",
       "description": "Collection of diagnostic sessions."
+    },
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Collection of user profiles."
     }
   }
 }

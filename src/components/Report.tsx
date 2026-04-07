@@ -12,10 +12,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 interface ReportProps {
   session: AssessmentSession;
+  userProfile?: any;
   onClose: () => void;
 }
 
-export const Report: React.FC<ReportProps> = ({ session, onClose }) => {
+export const Report: React.FC<ReportProps> = ({ session, userProfile, onClose }) => {
   const [report, setReport] = useState<string | null>(session.report || null);
   const [loading, setLoading] = useState(!session.report);
   const [exporting, setExporting] = useState(false);
@@ -24,9 +25,16 @@ export const Report: React.FC<ReportProps> = ({ session, onClose }) => {
   const generateReport = async () => {
     setLoading(true);
     try {
+      const isPartial = Object.keys(session.answers).length < 100;
       const prompt = `
         You are a world-class business and marketing strategist at Culturisk. 
         Analyze the following assessment data for a business and provide a brutally honest, consulting-grade strategic intelligence report.
+        
+        Business Context:
+        - Website: ${userProfile?.website || "Not provided"}
+        - User: ${userProfile?.displayName || "Anonymous"}
+        
+        ${isPartial ? "NOTE: This is a PARTIAL analysis based on early diagnostic data. Acknowledge this and focus on immediate signals while highlighting the need for deeper analysis." : "This is a COMPLETE diagnostic analysis."}
         
         Assessment Data:
         - Total Questions Answered: ${Object.keys(session.answers).length}
@@ -179,7 +187,7 @@ export const Report: React.FC<ReportProps> = ({ session, onClose }) => {
           ) : (
             <div ref={reportRef} className="bg-white p-12 shadow-sm rounded-xl border border-gray-100 relative overflow-hidden">
               {/* Watermark */}
-              <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] rotate-[-45deg] select-none">
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.05] rotate-[-45deg] select-none">
                 <span className="text-[120px] font-black tracking-tighter">CULTURISK</span>
               </div>
 

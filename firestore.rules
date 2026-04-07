@@ -36,6 +36,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.email is string &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('photoURL' in data) || data.photoURL is string) &&
+             (!('website' in data) || (data.website is string && data.website.size() < 200)) &&
+             (!('createdAt' in data) || data.createdAt is number);
+    }
+
     function isValidSession(data) {
       return data.id is string &&
              data.timestamp is number &&
@@ -51,6 +60,12 @@ service cloud.firestore {
     // ===============================================================
     // Rules
     // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isOwner(uid) && isValidUser(request.resource.data) && request.resource.data.uid == resource.data.uid;
+    }
 
     match /sessions/{sessionId} {
       // Allow read if user is the owner
